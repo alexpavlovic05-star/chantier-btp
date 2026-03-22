@@ -34,14 +34,14 @@ const adminLinks: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Chantiers", href: "/chantiers", icon: Building2 },
   { label: "Planning", href: "/planning", icon: CalendarDays },
-  { label: "Feuilles d'heures", href: "/feuilles-heures", icon: Clock },
-  { label: "Équipe", href: "/equipe", icon: Users },
+  { label: "Feuilles d'heures", href: "/timesheets", icon: Clock },
+  { label: "Équipe", href: "/team", icon: Users },
 ];
 
 const workerLinks: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { label: "Mon Planning", href: "/mon-planning", icon: CalendarDays },
-  { label: "Mes Heures", href: "/mes-heures", icon: Clock },
+  { label: "Mon Planning", href: "/my-planning", icon: CalendarDays },
+  { label: "Mes Heures", href: "/my-timesheets", icon: Clock },
 ];
 
 function NavLinks({ items, pathname }: { items: NavItem[]; pathname: string }) {

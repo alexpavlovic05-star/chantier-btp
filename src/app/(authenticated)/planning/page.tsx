@@ -16,10 +16,8 @@ import {
   ChevronRight,
   CalendarDays,
   Plus,
-  Pencil,
   Trash2,
   Loader2,
-  X,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -32,7 +30,6 @@ import {
   DialogFooter,
   DialogClose,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 // ---------------------------------------------------------------------------
@@ -84,12 +81,19 @@ function getWeekDays(monday: Date): Date[] {
   return Array.from({ length: 7 }, (_, i) => addDays(monday, i));
 }
 
+const HOURS = Array.from({ length: 15 }, (_, i) => i + 6); // 6h à 20h
+
 const TIME_OPTIONS: string[] = [];
 for (let h = 5; h <= 22; h++) {
   for (const m of ["00", "30"]) {
     if (h === 22 && m === "30") continue;
     TIME_OPTIONS.push(`${String(h).padStart(2, "0")}:${m}`);
   }
+}
+
+function timeToMinutes(time: string): number {
+  const [h, m] = time.split(":").map(Number);
+  return h * 60 + m;
 }
 
 function contrastColor(hex: string): string {
@@ -126,6 +130,9 @@ export default function PlanningPage() {
     endTime: "17:00",
   });
   const [submitting, setSubmitting] = useState(false);
+
+  // View mode
+  const [selectedDay, setSelectedDay] = useState<Date | null>(null);
 
   const weekString = useMemo(() => getWeekString(currentWeek), [currentWeek]);
   const weekDays = useMemo(() => getWeekDays(currentWeek), [currentWeek]);
@@ -178,7 +185,7 @@ export default function PlanningPage() {
       setUsers(usersData);
       setChantiers(chantiersData);
     } catch (err) {
-      toast.error("Erreur lors du chargement des donnees");
+      toast.error("Erreur lors du chargement des données");
       console.error(err);
     } finally {
       setLoading(false);
@@ -235,18 +242,17 @@ export default function PlanningPage() {
 
   async function handleSubmit() {
     if (!formData.chantierId) {
-      toast.error("Veuillez selectionner un chantier");
+      toast.error("Veuillez sélectionner un chantier");
       return;
     }
     if (formData.startTime >= formData.endTime) {
-      toast.error("L'heure de fin doit etre apres l'heure de debut");
+      toast.error("L'heure de fin doit être après l'heure de début");
       return;
     }
 
     setSubmitting(true);
     try {
       if (editingAffectation) {
-        // Update
         const res = await fetch(`/api/planning/${editingAffectation.id}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
@@ -260,9 +266,8 @@ export default function PlanningPage() {
           const err = await res.json().catch(() => ({}));
           throw new Error(err.error || "Erreur lors de la modification");
         }
-        toast.success("Affectation modifiee");
+        toast.success("Affectation modifiée");
       } else {
-        // Create
         const res = await fetch("/api/planning", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -276,9 +281,9 @@ export default function PlanningPage() {
         });
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
-          throw new Error(err.error || "Erreur lors de la creation");
+          throw new Error(err.error || "Erreur lors de la création");
         }
-        toast.success("Affectation ajoutee");
+        toast.success("Affectation ajoutée");
       }
       setDialogOpen(false);
       fetchData();
@@ -299,7 +304,7 @@ export default function PlanningPage() {
         method: "DELETE",
       });
       if (!res.ok) throw new Error("Erreur lors de la suppression");
-      toast.success("Affectation supprimee");
+      toast.success("Affectation supprimée");
       setDialogOpen(false);
       fetchData();
     } catch {
@@ -309,58 +314,36 @@ export default function PlanningPage() {
     }
   }
 
-  // ---- Render helpers ------------------------------------------------------
+  // ---- Vue semaine (Alobees style) -----------------------------------------
 
-  function renderAffectationBlock(aff: Affectation) {
-    const bgColor = aff.chantier?.color ?? "#3B82F6";
-    const textColor = contrastColor(bgColor);
+  function renderWeekOverview() {
     return (
-      <button
-        key={aff.id}
-        onClick={() => openEditDialog(aff)}
-        className="group relative w-full rounded-md px-2 py-1.5 text-left shadow-sm transition-shadow hover:shadow-md cursor-pointer text-xs leading-tight mb-1 last:mb-0"
-        style={{ backgroundColor: bgColor, color: textColor }}
-      >
-        <div className="font-semibold truncate">
-          {aff.startTime} - {aff.endTime}
-        </div>
-        <div className="truncate opacity-90">{aff.chantier?.name}</div>
-        <span
-          className="absolute top-0.5 right-0.5 hidden group-hover:flex items-center justify-center rounded-full size-4"
-          style={{ backgroundColor: "rgba(0,0,0,0.25)" }}
-        >
-          <Pencil className="size-2.5" style={{ color: textColor }} />
-        </span>
-      </button>
-    );
-  }
-
-  // ---- Desktop grid --------------------------------------------------------
-
-  function renderDesktopGrid() {
-    return (
-      <div className="hidden md:block overflow-x-auto">
+      <div className="overflow-x-auto">
         <table className="w-full border-collapse min-w-[900px]">
           <thead>
             <tr>
               <th className="sticky left-0 z-10 bg-muted/80 backdrop-blur-sm border-b border-r border-border px-3 py-2 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider w-40 min-w-[160px]">
-                Ouvrier
+                Salarié
               </th>
-              {weekDays.map((day) => {
+              {weekDays.slice(0, 5).map((day) => {
                 const isToday = isSameDay(day, new Date());
+                const isSelected = selectedDay && isSameDay(day, selectedDay);
                 return (
                   <th
                     key={day.toISOString()}
-                    className={`border-b border-r border-border px-2 py-2 text-center text-xs font-semibold min-w-[130px] ${
-                      isToday
+                    onClick={() => setSelectedDay(day)}
+                    className={`border-b border-r border-border px-2 py-2 text-center text-xs font-semibold min-w-[140px] cursor-pointer transition-colors ${
+                      isSelected
+                        ? "bg-primary text-primary-foreground"
+                        : isToday
                         ? "bg-primary/10 text-primary"
-                        : "text-muted-foreground"
+                        : "text-muted-foreground hover:bg-muted/50"
                     }`}
                   >
                     <div className="capitalize">
                       {format(day, "EEEE", { locale: fr })}
                     </div>
-                    <div className="text-[11px] font-normal mt-0.5">
+                    <div className={`text-[11px] font-normal mt-0.5 ${isSelected ? "text-primary-foreground/80" : ""}`}>
                       {format(day, "d MMMM", { locale: fr })}
                     </div>
                   </th>
@@ -371,31 +354,51 @@ export default function PlanningPage() {
           <tbody>
             {workers.length === 0 && (
               <tr>
-                <td
-                  colSpan={8}
-                  className="py-12 text-center text-muted-foreground text-sm"
-                >
-                  Aucun ouvrier trouve
+                <td colSpan={6} className="py-12 text-center text-muted-foreground text-sm">
+                  Aucun ouvrier trouvé. Créez des salariés dans l&apos;onglet Équipe.
                 </td>
               </tr>
             )}
             {workers.map((worker) => (
               <tr key={worker.id} className="group/row hover:bg-muted/30">
                 <td className="sticky left-0 z-10 bg-background group-hover/row:bg-muted/30 border-b border-r border-border px-3 py-2 font-medium text-sm whitespace-nowrap">
-                  {worker.name}
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
+                      {worker.name.charAt(0).toUpperCase()}
+                    </div>
+                    {worker.name}
+                  </div>
                 </td>
-                {weekDays.map((day) => {
+                {weekDays.slice(0, 5).map((day) => {
                   const cellAffs = getAffectationsForCell(worker.id, day);
                   const isToday = isSameDay(day, new Date());
                   return (
                     <td
                       key={day.toISOString()}
-                      className={`border-b border-r border-border px-1.5 py-1.5 align-top min-h-[60px] ${
+                      className={`border-b border-r border-border px-1.5 py-1.5 align-top ${
                         isToday ? "bg-primary/5" : ""
                       }`}
                     >
-                      <div className="space-y-1 min-h-[48px]">
-                        {cellAffs.map(renderAffectationBlock)}
+                      <div className="space-y-1 min-h-[52px]">
+                        {cellAffs.map((aff) => {
+                          const bgColor = aff.chantier?.color ?? "#3B82F6";
+                          const textColor = contrastColor(bgColor);
+                          return (
+                            <button
+                              key={aff.id}
+                              onClick={() => openEditDialog(aff)}
+                              className="w-full rounded-md px-2 py-1.5 text-left shadow-sm hover:shadow-md cursor-pointer text-xs leading-tight transition-shadow"
+                              style={{ backgroundColor: bgColor, color: textColor }}
+                            >
+                              <div className="font-bold">
+                                {aff.startTime} - {aff.endTime}
+                              </div>
+                              <div className="truncate opacity-90">
+                                {aff.chantier?.name}
+                              </div>
+                            </button>
+                          );
+                        })}
                         <button
                           onClick={() => openAddDialog(worker.id, day)}
                           className="flex items-center justify-center w-full rounded-md border border-dashed border-muted-foreground/25 py-1 text-muted-foreground/50 hover:border-primary/50 hover:text-primary/70 hover:bg-primary/5 transition-colors cursor-pointer"
@@ -414,6 +417,140 @@ export default function PlanningPage() {
     );
   }
 
+  // ---- Vue journée détaillée (timeline heure par heure) --------------------
+
+  function renderDayTimeline() {
+    if (!selectedDay) return null;
+
+    const dayAffs = affectations.filter((a) =>
+      isSameDay(parseISO(a.date), selectedDay)
+    );
+
+    // Grouper par worker
+    const workerAffs = workers.map((worker) => ({
+      worker,
+      affs: dayAffs
+        .filter((a) => a.userId === worker.id)
+        .sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime)),
+    }));
+
+    const startHour = 6; // 6h
+    const endHour = 20; // 20h
+    const totalMinutes = (endHour - startHour) * 60;
+
+    return (
+      <div className="mt-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-bold capitalize">
+            {format(selectedDay, "EEEE d MMMM yyyy", { locale: fr })}
+          </h2>
+          <Button variant="outline" size="sm" onClick={() => setSelectedDay(null)}>
+            Retour à la semaine
+          </Button>
+        </div>
+
+        <div className="overflow-x-auto border border-border rounded-lg">
+          <div className="min-w-[800px]">
+            {/* En-tête horaire */}
+            <div className="flex border-b border-border">
+              <div className="w-40 min-w-[160px] shrink-0 bg-muted/50 px-3 py-2 text-xs font-semibold text-muted-foreground border-r border-border">
+                Salarié
+              </div>
+              <div className="flex-1 relative">
+                <div className="flex">
+                  {HOURS.map((hour) => (
+                    <div
+                      key={hour}
+                      className="flex-1 text-center text-[11px] text-muted-foreground font-medium py-2 border-r border-border last:border-r-0"
+                    >
+                      {String(hour).padStart(2, "0")}:00
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Lignes par salarié */}
+            {workerAffs.map(({ worker, affs }) => (
+              <div
+                key={worker.id}
+                className="flex border-b border-border last:border-b-0 hover:bg-muted/20"
+              >
+                <div className="w-40 min-w-[160px] shrink-0 px-3 py-3 border-r border-border flex items-center gap-2">
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
+                    {worker.name.charAt(0).toUpperCase()}
+                  </div>
+                  <span className="text-sm font-medium truncate">{worker.name}</span>
+                </div>
+                <div className="flex-1 relative" style={{ minHeight: "52px" }}>
+                  {/* Lignes verticales pour chaque heure */}
+                  <div className="absolute inset-0 flex pointer-events-none">
+                    {HOURS.map((hour) => (
+                      <div
+                        key={hour}
+                        className="flex-1 border-r border-border/50 last:border-r-0"
+                      />
+                    ))}
+                  </div>
+
+                  {/* Blocs d'affectation positionnés */}
+                  <div className="absolute inset-0 py-1.5 px-0.5">
+                    {affs.map((aff) => {
+                      const startMin = timeToMinutes(aff.startTime) - startHour * 60;
+                      const endMin = timeToMinutes(aff.endTime) - startHour * 60;
+                      const left = Math.max(0, (startMin / totalMinutes) * 100);
+                      const width = Math.min(100 - left, ((endMin - startMin) / totalMinutes) * 100);
+                      const bgColor = aff.chantier?.color ?? "#3B82F6";
+                      const textColor = contrastColor(bgColor);
+
+                      return (
+                        <button
+                          key={aff.id}
+                          onClick={() => openEditDialog(aff)}
+                          className="absolute top-1.5 bottom-1.5 rounded-md px-2 flex flex-col justify-center shadow-sm hover:shadow-md cursor-pointer transition-shadow overflow-hidden"
+                          style={{
+                            left: `${left}%`,
+                            width: `${width}%`,
+                            backgroundColor: bgColor,
+                            color: textColor,
+                          }}
+                        >
+                          <div className="text-[11px] font-bold whitespace-nowrap">
+                            {aff.startTime} - {aff.endTime}
+                          </div>
+                          <div className="text-[11px] truncate opacity-90">
+                            {aff.chantier?.name}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Zone cliquable pour ajouter */}
+                  {affs.length === 0 && (
+                    <button
+                      onClick={() => openAddDialog(worker.id, selectedDay)}
+                      className="absolute inset-0 flex items-center justify-center text-muted-foreground/30 hover:text-primary/50 hover:bg-primary/5 transition-colors cursor-pointer"
+                    >
+                      <Plus className="size-4" />
+                      <span className="text-xs ml-1">Ajouter</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+
+            {workerAffs.length === 0 && (
+              <div className="py-12 text-center text-muted-foreground text-sm">
+                Aucun ouvrier trouvé
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // ---- Mobile view ---------------------------------------------------------
 
   function renderMobileView() {
@@ -421,7 +558,7 @@ export default function PlanningPage() {
       <div className="md:hidden space-y-4">
         {workers.length === 0 && (
           <div className="py-12 text-center text-muted-foreground text-sm">
-            Aucun ouvrier trouve
+            Aucun ouvrier trouvé
           </div>
         )}
         {workers.map((worker) => (
@@ -429,11 +566,14 @@ export default function PlanningPage() {
             key={worker.id}
             className="rounded-xl border border-border bg-card overflow-hidden"
           >
-            <div className="px-4 py-2.5 bg-muted/50 border-b border-border font-semibold text-sm">
+            <div className="px-4 py-2.5 bg-muted/50 border-b border-border font-semibold text-sm flex items-center gap-2">
+              <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
+                {worker.name.charAt(0).toUpperCase()}
+              </div>
               {worker.name}
             </div>
             <div className="divide-y divide-border">
-              {weekDays.map((day) => {
+              {weekDays.slice(0, 5).map((day) => {
                 const cellAffs = getAffectationsForCell(worker.id, day);
                 const isToday = isSameDay(day, new Date());
                 return (
@@ -460,11 +600,29 @@ export default function PlanningPage() {
                     </div>
                     {cellAffs.length === 0 ? (
                       <div className="text-xs text-muted-foreground/50 italic">
-                        Aucune affectation
+                        Pas d&apos;affectation
                       </div>
                     ) : (
                       <div className="space-y-1">
-                        {cellAffs.map(renderAffectationBlock)}
+                        {cellAffs.map((aff) => {
+                          const bgColor = aff.chantier?.color ?? "#3B82F6";
+                          const textColor = contrastColor(bgColor);
+                          return (
+                            <button
+                              key={aff.id}
+                              onClick={() => openEditDialog(aff)}
+                              className="w-full rounded-md px-2 py-1.5 text-left shadow-sm text-xs leading-tight cursor-pointer"
+                              style={{ backgroundColor: bgColor, color: textColor }}
+                            >
+                              <div className="font-bold">
+                                {aff.startTime} - {aff.endTime}
+                              </div>
+                              <div className="truncate opacity-90">
+                                {aff.chantier?.name}
+                              </div>
+                            </button>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -497,7 +655,7 @@ export default function PlanningPage() {
             variant="outline"
             size="icon"
             onClick={goToPreviousWeek}
-            aria-label="Semaine precedente"
+            aria-label="Semaine précédente"
           >
             <ChevronLeft className="size-4" />
           </Button>
@@ -515,6 +673,13 @@ export default function PlanningPage() {
         </div>
       </div>
 
+      {/* Instruction */}
+      {!selectedDay && !loading && (
+        <p className="text-xs text-muted-foreground bg-muted/50 rounded-md px-3 py-2">
+          💡 Cliquez sur un jour de la semaine pour voir le détail heure par heure de chaque salarié.
+        </p>
+      )}
+
       {/* Content */}
       {loading ? (
         <div className="flex items-center justify-center py-24">
@@ -522,7 +687,12 @@ export default function PlanningPage() {
         </div>
       ) : (
         <>
-          {renderDesktopGrid()}
+          {/* Desktop */}
+          <div className="hidden md:block">
+            {renderWeekOverview()}
+            {renderDayTimeline()}
+          </div>
+          {/* Mobile */}
           {renderMobileView()}
         </>
       )}
@@ -560,7 +730,7 @@ export default function PlanningPage() {
                     chantierId: e.target.value,
                   }))
                 }
-                className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
               >
                 <option value="">-- Choisir un chantier --</option>
                 {activeChantiers.map((c) => (
@@ -574,7 +744,7 @@ export default function PlanningPage() {
             {/* Time selectors */}
             <div className="grid grid-cols-2 gap-3">
               <div className="grid gap-1.5">
-                <Label htmlFor="start-time">Heure de debut</Label>
+                <Label htmlFor="start-time">Heure de début</Label>
                 <select
                   id="start-time"
                   value={formData.startTime}
@@ -584,7 +754,7 @@ export default function PlanningPage() {
                       startTime: e.target.value,
                     }))
                   }
-                  className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                  className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
                 >
                   {TIME_OPTIONS.map((t) => (
                     <option key={t} value={t}>
@@ -604,7 +774,7 @@ export default function PlanningPage() {
                       endTime: e.target.value,
                     }))
                   }
-                  className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                  className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
                 >
                   {TIME_OPTIONS.map((t) => (
                     <option key={t} value={t}>
@@ -625,7 +795,7 @@ export default function PlanningPage() {
                 disabled={submitting}
                 className="mr-auto"
               >
-                <Trash2 className="size-3.5" />
+                <Trash2 className="size-3.5 mr-1" />
                 Supprimer
               </Button>
             )}
@@ -639,7 +809,7 @@ export default function PlanningPage() {
               onClick={handleSubmit}
               disabled={submitting}
             >
-              {submitting && <Loader2 className="size-3.5 animate-spin" />}
+              {submitting && <Loader2 className="size-3.5 animate-spin mr-1" />}
               {editingAffectation ? "Enregistrer" : "Ajouter"}
             </Button>
           </DialogFooter>
